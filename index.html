@@ -4,8 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Melting Snowman Hangman</title>
-<meta name="description" content="Hangman with a melting snowman using your own layered images.">
-
+<meta name="description" content="Hangman with a custom melting snowman using layered PNGs.">
 <style>
   /* ====== Theme ====== */
   :root{
@@ -13,9 +12,11 @@
     --good:#7ee081; --bad:#ff7d7d;
   }
   *{box-sizing:border-box}
-  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
-       font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;
-       background:var(--bg);color:var(--ink)}
+  body{
+    margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;
+    background:var(--bg);color:var(--ink)
+  }
   .app{width:min(1100px,96vw);display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:stretch}
   .card{background:var(--card);border-radius:16px;padding:18px 20px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
   h1{margin:0 0 10px;color:var(--accent);font-size:22px;letter-spacing:.4px}
@@ -35,15 +36,16 @@
   .status{min-height:28px;margin-top:10px;font-size:18px}
   .good{color:var(--good)} .bad{color:var(--bad)}
 
-  /* ====== Scene & Snowman (your images) ====== */
-  .scene{position:relative;border-radius:16px;overflow:hidden;min-height:460px;
-         display:flex;align-items:center;justify-content:center;background:linear-gradient(#0f2f4d,#0b1b2b)}
+  /* ====== Scene & Snowman (layered PNGs) ====== */
+  .scene{
+    position:relative;border-radius:16px;overflow:hidden;min-height:460px;
+    display:flex;align-items:center;justify-content:center;background:linear-gradient(#0f2f4d,#0b1b2b)
+  }
   .ground{position:absolute;inset:auto 0 0 0;height:26%;background:linear-gradient(#eaf6ff,#cfeaff)}
   .snowman-wrap{position:relative;width:min(480px,86%);aspect-ratio:3/4}
-  /* Stack the layers: each exported from the same canvas size for perfect alignment */
   .part{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:contain;pointer-events:none}
 
-  /* ====== Melt animations (apply via JS on each wrong step) ====== */
+  /* ====== Melt keyframes ====== */
   @keyframes slideoff { to { transform: translateY(-24px) rotate(-18deg); opacity:.0 } }
   @keyframes droparms { to { transform: translateY(35px) rotate(18deg); opacity:.55 } }
   @keyframes drip     { to { transform: translateY(14px); opacity:.25 } }
@@ -51,18 +53,8 @@
   @keyframes sag      { to { transform: translateY(20px) scaleX(1.02) scaleY(.92); opacity:.8 } }
   @keyframes puddle   { from { transform: scale(.2); opacity:0 } to { transform: scale(1); opacity:1 } }
 
-  /* We’ll toggle these classes as steps 1..6 */
-  .m1-hat     { animation: slideoff .7s forwards ease-in }
-  .m2-arms    { animation: droparms .6s forwards ease }
-  .m3-face    { animation: drip .7s forwards ease }
-  .m4-head    { animation: tilthead .7s forwards ease-in }
-  .m5-body    { animation: sag .8s forwards ease }
-  .m6-puddle  { animation: puddle .9s forwards ease }
-
-  /* Small screens: stack layout */
-  @media (max-width: 860px){
-    .app{grid-template-columns:1fr}
-  }
+  /* Mobile layout */
+  @media (max-width: 860px){ .app{grid-template-columns:1fr} }
 </style>
 </head>
 <body>
@@ -92,26 +84,21 @@
     <!-- Right: your snowman art -->
     <div class="card scene" role="region" aria-label="Snowman scene">
       <div class="ground"></div>
-
-      <!--
-        IMPORTANT:
-        Export every PNG from the SAME Canva canvas size.
-        Place all files in /images next to index.html, with these names:
-          bottom.png, torso.png, head.png, eye-left.png, eye-right.png, nose.png,
-          scarf.png, arm-left.png, arm-right.png, hat.png, puddle.png (optional)
-      -->
+      <!-- Export every PNG from the SAME Canva canvas size. Place into /images -->
       <div class="snowman-wrap" aria-hidden="true">
         <img src="images/bottom.png"     class="part bottom"     alt="">
         <img src="images/torso.png"      class="part torso"      alt="">
         <img src="images/head.png"       class="part head"       alt="">
         <img src="images/eye-left.png"   class="part eye-left"   alt="">
         <img src="images/eye-right.png"  class="part eye-right"  alt="">
+        <img src="images/brow-left.png"  class="part brow-left"  alt="">
+        <img src="images/brow-right.png" class="part brow-right" alt="">
         <img src="images/nose.png"       class="part nose"       alt="">
         <img src="images/scarf.png"      class="part scarf"      alt="">
         <img src="images/arm-left.png"   class="part arm-left"   alt="">
         <img src="images/arm-right.png"  class="part arm-right"  alt="">
         <img src="images/hat.png"        class="part hat"        alt="">
-        <!-- optional puddle image; if missing, it just won’t show -->
+        <!-- optional puddle image -->
         <img src="images/puddle.png"     class="part puddle"     alt="" style="opacity:0; transform:scale(.2)">
       </div>
     </div>
@@ -144,20 +131,23 @@
   const hintBtn = document.getElementById('hint');
   const revealBtn = document.getElementById('reveal');
 
-  // Parts (images)
-  const el = (sel) => document.querySelector(sel);
+  // Helper to select (returns null if missing)
+  const $ = (sel) => document.querySelector(sel);
+
+  // Parts (images) — includes eyebrows
   const parts = {
-    hat:      el('.hat'),
-    armsL:    el('.arm-left'),
-    armsR:    el('.arm-right'),
-    head:     el('.head'),
-    torso:    el('.torso'),
-    bottom:   el('.bottom'),
-    eyeL:     el('.eye-left'),
-    eyeR:     el('.eye-right'),
-    nose:     el('.nose'),
-    scarf:    el('.scarf'),
-    puddle:   el('.puddle')
+    hat:      $('.hat'),
+    armL:     $('.arm-left'),
+    armR:     $('.arm-right'),
+    eyeL:     $('.eye-left'),
+    eyeR:     $('.eye-right'),
+    browL:    $('.brow-left'),
+    browR:    $('.brow-right'),
+    nose:     $('.nose'),
+    head:     $('.head'),
+    torso:    $('.torso'),
+    bottom:   $('.bottom'),
+    puddle:   $('.puddle')
   };
 
   /* =================== STATE =================== */
@@ -170,14 +160,16 @@
     revealed = answer.split('').map(ch => ch===' '? ' ' : (/[A-Z]/.test(ch)? '_' : ch));
     used = [];
     lives = MAX_LIVES;
-    renderBlanks();
-    renderKeyboard();
+    blanksEl.innerHTML = '';
     usedEl.textContent = '';
     livesEl.textContent = lives;
     statusEl.textContent = '';
+    renderBlanks();
+    renderKeyboard();
     resetMelt();
   }
 
+  /* =================== RENDER =================== */
   function renderBlanks(){
     blanksEl.innerHTML = '';
     revealed.forEach(ch=>{
@@ -207,6 +199,7 @@
 
   function isFinished(){ return lives<=0 || !revealed.includes('_'); }
 
+  /* =================== GAMEPLAY =================== */
   function guess(letter){
     if (used.includes(letter) || isFinished()) return;
     updateUsed(letter);
@@ -240,61 +233,53 @@
     renderBlanks();
   }
 
-  /* =================== MELT LOGIC ===================
-     We apply one class per step. If your art doesn't include a part (e.g., no puddle.png),
-     that step just won’t show.
-     Order:
-       1) Hat slides off
-       2) Arms drop
-       3) Face bits drip (eyes + nose)
-       4) Head tilts
-       5) Torso + bottom sag
-       6) Puddle grows
-  ==================================================== */
+  /* =================== MELT ANIMATIONS =================== */
+  // Inline animation helper so it always replays
+  function play(el, css){ if (!el) return; el.style.animation='none'; void el.offsetWidth; el.style.animation = css; }
+  function clear(el){ if (!el) return; el.style.animation='none'; el.style.opacity=''; el.style.transform=''; void el.offsetWidth; }
+
   function resetMelt(){
-    // Clear any previous animations by removing classes and inline styles
-    const all = [parts.hat, parts.armsL, parts.armsR, parts.eyeL, parts.eyeR, parts.nose,
-                 parts.head, parts.torso, parts.bottom, parts.puddle];
-    all.forEach(p=>{
-      if (!p) return;
-      p.classList.remove('m1-hat','m2-arms','m3-face','m4-head','m5-body','m6-puddle');
-      // reset puddle invisibility
-      if (p === parts.puddle){ p.style.opacity = 0; p.style.transform = 'scale(.2)'; }
-    });
+    Object.values(parts).forEach(clear);
+    if (parts.puddle){ parts.puddle.style.opacity=0; parts.puddle.style.transform='scale(.2)'; }
   }
 
+  /* Order:
+      1) Hat slides off
+      2) Arms drop
+      3) Face drips (eyes + eyebrows + nose)
+      4) Head tilts
+      5) Torso + bottom sag
+      6) Puddle grows
+  */
   function meltStep(){
     const step = MAX_LIVES - lives + 1; // 1..6
-    // force reflow helper
-    const reflow = el => { if (!el) return; el.style.animation = 'none'; void el.offsetWidth; };
 
     switch(step){
       case 1:
-        if (parts.hat){ reflow(parts.hat); parts.hat.classList.add('m1-hat'); }
+        play(parts.hat, 'slideoff .7s forwards ease-in');
         break;
       case 2:
-        if (parts.armsL){ reflow(parts.armsL); parts.armsL.classList.add('m2-arms'); }
-        if (parts.armsR){ reflow(parts.armsR); parts.armsR.classList.add('m2-arms'); }
+        play(parts.armL, 'droparms .6s forwards ease');
+        play(parts.armR, 'droparms .6s forwards ease');
         break;
       case 3:
-        if (parts.eyeL){ reflow(parts.eyeL); parts.eyeL.classList.add('m3-face'); }
-        if (parts.eyeR){ reflow(parts.eyeR); parts.eyeR.classList.add('m3-face'); }
-        if (parts.nose){ reflow(parts.nose); parts.nose.classList.add('m3-face'); }
+        play(parts.eyeL, 'drip .7s forwards ease');
+        play(parts.eyeR, 'drip .7s forwards ease');
+        play(parts.browL, 'drip .7s forwards ease');
+        play(parts.browR, 'drip .7s forwards ease');
+        play(parts.nose, 'drip .7s forwards ease');
         break;
       case 4:
-        if (parts.head){ reflow(parts.head); parts.head.classList.add('m4-head'); }
+        play(parts.head, 'tilthead .7s forwards ease-in');
         break;
       case 5:
-        if (parts.torso){ reflow(parts.torso); parts.torso.classList.add('m5-body'); }
-        if (parts.bottom){ reflow(parts.bottom); parts.bottom.classList.add('m5-body'); }
+        play(parts.torso, 'sag .8s forwards ease');
+        play(parts.bottom,'sag .8s forwards ease');
         break;
       case 6:
         if (parts.puddle){
-          // Ensure puddle is visible before animating
-          parts.puddle.style.opacity = 0;
-          parts.puddle.style.transform = 'scale(.2)';
-          reflow(parts.puddle);
-          parts.puddle.classList.add('m6-puddle');
+          parts.puddle.style.opacity=0; parts.puddle.style.transform='scale(.2)';
+          play(parts.puddle,'puddle .9s forwards ease');
         }
         break;
     }
@@ -303,17 +288,15 @@
   /* =================== HINT =================== */
   function hint(){
     if (isFinished() || lives<=0) return;
-    // find unique unrevealed letters
     const set = new Set();
     answer.split('').forEach((ch,i)=>{ if (/[A-Z]/.test(ch) && revealed[i]==='_') set.add(ch); });
     const options = [...set];
     if (!options.length) return;
     const letter = options[Math.floor(Math.random()*options.length)];
-    // reveal all of that letter
     answer.split('').forEach((ch,i)=>{ if (ch===letter) revealed[i]=letter; });
     if (!used.includes(letter)) updateUsed(letter);
     renderBlanks();
-    // cost 1 life
+    // cost a life
     wrongStep();
     if (!revealed.includes('_') && lives>=0){
       statusEl.innerHTML = `<span class="good">Solved with a hint!</span> The phrase was <strong>${answer}</strong>.`;
@@ -333,6 +316,13 @@
   window.addEventListener('keydown', (e)=>{
     const k = e.key.toUpperCase();
     if (/^[A-Z]$/.test(k)) guess(k);
+  });
+
+  // (Optional) log missing parts once on load
+  window.addEventListener('load', ()=>{
+    Object.entries(parts).forEach(([name, el])=>{
+      if (!el) console.warn('Missing image layer:', name);
+    });
   });
 
   // Go!
