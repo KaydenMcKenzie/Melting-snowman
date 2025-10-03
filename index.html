@@ -6,22 +6,12 @@
 <title>Melting Snowman Hangman — Per-Part Drops</title>
 <meta name="description" content="Hangman with a custom snowman where each part drops on a wrong guess.">
 <style>
-  /* ====== Theme ====== */
-  :root{
-    --bg:#0b1b2b; --card:#10304b; --ink:#eaf6ff; --accent:#8fd3ff;
-    --good:#7ee081; --bad:#ff7d7d;
-  }
+  :root{ --bg:#0b1b2b; --card:#10304b; --ink:#eaf6ff; --accent:#8fd3ff; --good:#7ee081; --bad:#ff7d7d; }
   *{box-sizing:border-box}
-  body{
-    margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
-    font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;
-    background:var(--bg);color:var(--ink)
-  }
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;background:var(--bg);color:var(--ink)}
   .app{width:min(1100px,96vw);display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:stretch}
   .card{background:var(--card);border-radius:16px;padding:18px 20px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
   h1{margin:0 0 10px;color:var(--accent);font-size:22px;letter-spacing:.4px}
-
-  /* ====== Game UI ====== */
   .meta{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 14px}
   .tag{background:#163b59;border-radius:999px;padding:6px 10px;font-size:12px;opacity:.9}
   .blanks{display:flex;gap:10px;flex-wrap:wrap;font-size:28px;letter-spacing:.2rem}
@@ -35,65 +25,38 @@
   .actions button{background:#245d86;color:var(--ink);border:0;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer}
   .status{min-height:28px;margin-top:10px;font-size:18px}
   .good{color:var(--good)} .bad{color:var(--bad)}
-
-  /* ====== Scene & Snowman (layered PNGs) ====== */
-  .scene{
-    position:relative;border-radius:16px;overflow:hidden;min-height:460px;
-    display:flex;align-items:center;justify-content:center;background:linear-gradient(#0f2f4d,#0b1b2b)
-  }
+  .scene {position: relative;border-radius: 16px;overflow: hidden;min-height: 460px;display: flex;align-items: center;justify-content: center;
+  background: linear-gradient(rgba(15,47,77,0.3), rgba(11,27,43,0.3)),url("images/background.png") center/cover no-repeat;}
   .ground{position:absolute;inset:auto 0 0 0;height:26%;background:linear-gradient(#eaf6ff,#cfeaff)}
   .snowman-wrap{position:relative;width:min(480px,86%);aspect-ratio:3/4}
   .part{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:contain;pointer-events:none;will-change:transform}
-
-  /* ====== New: per-part drop animation (no fading) ====== */
-  /* We drop to ~115% of the snowman box height so it lands on the ground band */
-  @keyframes drop {
-    0%   { transform: translateY(0) rotate(var(--rot,0deg)); }
-    88%  { transform: translateY(115%) rotate(var(--rot,0deg)); }
-    100% { transform: translateY(115%) rotate(var(--rot,0deg)); }
-  }
-  .drop-now { animation: drop .7s ease-in forwards; }
-
-  /* Optional puddle grow (kept, but no opacity fade) */
-  @keyframes puddle {
-    0%   { transform: scale(.2); }
-    100% { transform: scale(1);  }
-  }
-  .puddle { opacity:1; transform:scale(.2); } /* visible by default but tiny */
-  .puddle-grow { animation: puddle .9s ease-out forwards; }
-
-  /* Mobile layout */
-  @media (max-width: 860px){ .app{grid-template-columns:1fr} }
+  /* Per-part drop (no fading). Falls to ground (≈115% of box). */
+  @keyframes drop { 0%{transform:translateY(0) rotate(var(--rot,0deg));} 88%{transform:translateY(115%) rotate(var(--rot,0deg));} 100%{transform:translateY(115%) rotate(var(--rot,0deg));} }
+  @media (max-width:860px){ .app{grid-template-columns:1fr} }
 </style>
 </head>
 <body>
   <div class="app">
-    <!-- Left: controls -->
     <div class="card" role="region" aria-label="Game controls">
       <h1>Melting Snowman Hangman</h1>
       <div class="meta">
         <div class="tag">Lives: <span id="lives">–</span></div>
         <div class="tag">Category: <span id="category">Holiday</span></div>
       </div>
-
       <div id="blanks" class="blanks" aria-live="polite"></div>
       <p class="used">Used: <span id="used"></span></p>
-
       <div id="keyboard" class="keyboard" aria-label="On-screen keyboard"></div>
-
       <div class="actions">
         <button id="new">New Word</button>
         <button id="hint">Hint (–1 life)</button>
         <button id="reveal">Reveal</button>
+        <button id="test">Drop Next Part (test)</button>
       </div>
-
       <div id="status" class="status" aria-live="polite"></div>
     </div>
 
-    <!-- Right: your snowman art -->
     <div class="card scene" role="region" aria-label="Snowman scene">
       <div class="ground"></div>
-      <!-- Export every PNG from the SAME Canva canvas size. Place into /images -->
       <div class="snowman-wrap" aria-hidden="true">
         <img src="images/bottom.png"     class="part bottom"     alt="">
         <img src="images/torso.png"      class="part torso"      alt="">
@@ -107,15 +70,13 @@
         <img src="images/arm-left.png"   class="part arm-left"   alt="">
         <img src="images/arm-right.png"  class="part arm-right"  alt="">
         <img src="images/hat.png"        class="part hat"        alt="">
-        <!-- optional puddle image (starts small; grows on the final step) -->
-        <img src="images/puddle.png"     class="part puddle"     alt="">
       </div>
     </div>
   </div>
 
 <script>
 (() => {
-  /* =================== CONFIG =================== */
+  /* ===== Words ===== */
   const WORDS = [
     "MISTLETOE","SLEIGH BELLS","WINTER WONDERLAND","GINGERBREAD","CANDY CANE",
     "SNOWFLAKE","NORTH POLE","FRUITCAKE","ELF ON THE SHELF","SILENT NIGHT",
@@ -129,96 +90,77 @@
     "ADVENT CALENDAR","CANDY CANE LANE","GINGERBREAD HOUSE","WINTER COAT","WASSAIL","SUGAR COOKIES"
   ];
 
-  /* PARTS: order of drops (one per wrong guess).
-     You can reorder this array to change the sequence.
-     Each item: { sel: '.css-class', rot: degrees }  (rot optional)
-  */
-  const DROP_SEQUENCE = [
+  /* ===== Per-part drop order — HEAD before SCARF, no puddle ===== */
+  const ORDER = [
     { sel: '.hat',        rot: -12 },
     { sel: '.brow-left',  rot: -6  },
     { sel: '.brow-right', rot:  6  },
     { sel: '.eye-left',   rot: -3  },
     { sel: '.eye-right',  rot:  3  },
     { sel: '.nose',       rot:  8  },
-    { sel: '.scarf',      rot: -10 },
+    { sel: '.head',       rot: 10  },  // head falls off here
+    { sel: '.scarf',      rot: -10 },  // scarf falls AFTER head
     { sel: '.arm-left',   rot: -14 },
     { sel: '.arm-right',  rot:  14 },
-    { sel: '.head',       rot:  10 },
-    { sel: '.torso',      rot:  6  },
-    { sel: '.bottom',     rot:  4  },
-    // Final step (if present) will grow the puddle instead of dropping it
-    // Puddle is handled separately so it doesn't disappear below the ground.
+    { sel: '.torso',      rot:   6 },
+    { sel: '.bottom',     rot:   4 }
   ];
 
-  const HAS_PUDDLE = !!document.querySelector('.puddle');
-  const MAX_LIVES = DROP_SEQUENCE.length + (HAS_PUDDLE ? 1 : 0);
+  const MAX_LIVES = ORDER.length;
 
-  /* =================== DOM =================== */
-  const blanksEl = document.getElementById('blanks');
-  const keyboardEl = document.getElementById('keyboard');
-  const usedEl = document.getElementById('used');
-  const livesEl = document.getElementById('lives');
-  const statusEl = document.getElementById('status');
-  const newBtn = document.getElementById('new');
-  const hintBtn = document.getElementById('hint');
-  const revealBtn = document.getElementById('reveal');
+  /* ===== DOM ===== */
+  const $ = (s)=>document.querySelector(s);
+  const blanksEl = $('#blanks'), keyboardEl = $('#keyboard'), usedEl = $('#used'),
+        livesEl  = $('#lives'),  statusEl   = $('#status'),
+        newBtn   = $('#new'),    hintBtn    = $('#hint'),
+        revealBtn= $('#reveal'), testBtn    = $('#test');
 
-  /* =================== STATE =================== */
+  /* ===== State ===== */
   let answer, revealed, used, lives, wrongs;
 
-  function $(sel){ return document.querySelector(sel); }
   function pickWord(){ return WORDS[Math.floor(Math.random()*WORDS.length)]; }
 
   function reset(word=null){
     answer = (word || pickWord()).toUpperCase();
-    revealed = answer.split('').map(ch => ch===' '? ' ' : (/[A-Z]/.test(ch)? '_' : ch));
+    revealed = answer.split('').map(ch => ch===' ' ? ' ' : (/[A-Z]/.test(ch)? '_' : ch));
     used = [];
     lives = MAX_LIVES;
     wrongs = 0;
-    blanksEl.innerHTML = '';
-    usedEl.textContent = '';
     livesEl.textContent = lives;
     statusEl.textContent = '';
+    usedEl.textContent = '';
     renderBlanks();
     renderKeyboard();
     resetParts();
   }
 
-  /* =================== RENDER =================== */
+  /* ===== Render ===== */
   function renderBlanks(){
     blanksEl.innerHTML = '';
     revealed.forEach(ch=>{
       const s = document.createElement('span');
-      s.className = 'blank' + (ch===' ' ? ' space':'');
+      s.className = 'blank' + (ch===' ' ? ' space' : '');
       s.textContent = ch===' ' ? ' ' : ch;
       blanksEl.appendChild(s);
     });
   }
-
   function renderKeyboard(){
     keyboardEl.innerHTML = '';
     'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(l=>{
       const b = document.createElement('button');
-      b.className = 'key';
-      b.textContent = l;
-      b.disabled = used?.includes(l) || isFinished();
-      b.addEventListener('click', ()=> guess(l));
+      b.className = 'key'; b.textContent = l;
+      b.disabled = used.includes(l) || isFinished();
+      b.addEventListener('click', ()=>guess(l));
       keyboardEl.appendChild(b);
     });
   }
-
-  function updateUsed(letter){
-    used.push(letter);
-    usedEl.textContent = used.join(' ');
-  }
-
+  function updateUsed(letter){ used.push(letter); usedEl.textContent = used.join(' '); }
   function isFinished(){ return lives<=0 || !revealed.includes('_'); }
 
-  /* =================== GAMEPLAY =================== */
+  /* ===== Gameplay ===== */
   function guess(letter){
     if (used.includes(letter) || isFinished()) return;
     updateUsed(letter);
-
     if (answer.includes(letter)){
       answer.split('').forEach((ch,i)=>{ if (ch===letter) revealed[i]=letter; });
       renderBlanks();
@@ -232,91 +174,63 @@
     renderKeyboard();
   }
 
+  /* ===== Animations (inline) ===== */
+  function playDrop(el, rot=0){
+    if (!el) return;
+    el.style.animation = 'none';
+    el.style.setProperty('--rot', rot+'deg');
+    void el.offsetWidth; // reflow
+    el.style.animation = 'drop .7s ease-in forwards';
+  }
+  function resetParts(){
+    ORDER.forEach(o=>{
+      const el = $(o.sel);
+      if (!el) return;
+      el.style.animation = 'none';
+      el.style.transform = ''; // back to original
+      void el.offsetWidth;
+    });
+  }
+
   function wrongStep(){
-    if (wrongs < DROP_SEQUENCE.length){
-      const step = DROP_SEQUENCE[wrongs];
-      const part = $(step.sel);
-      if (part){
-        part.style.setProperty('--rot', (step.rot||0) + 'deg');
-        // replay animation
-        part.classList.remove('drop-now'); void part.offsetWidth; part.classList.add('drop-now');
-      }
-    } else if (HAS_PUDDLE){
-      const puddle = $('.puddle');
-      if (puddle){
-        puddle.classList.remove('puddle-grow'); void puddle.offsetWidth; puddle.classList.add('puddle-grow');
-      }
+    if (wrongs < ORDER.length){
+      const step = ORDER[wrongs];
+      playDrop($(step.sel), step.rot||0);
     }
-    wrongs++;
-    lives--;
-    livesEl.textContent = lives;
+    wrongs++; lives--; livesEl.textContent = lives;
 
     if (lives<=0){
       statusEl.innerHTML = `<span class="bad">You lose!</span> The phrase was <strong>${answer}</strong>.`;
-      revealAll();
-      renderKeyboard();
+      revealAll(); renderKeyboard();
     }
   }
 
-  function revealAll(){
-    revealed = answer.split('').map(ch => ch===' ' ? ' ' : ch);
-    renderBlanks();
-  }
+  function revealAll(){ revealed = answer.split('').map(ch => ch===' ' ? ' ' : ch); renderBlanks(); }
 
-  function resetParts(){
-    // Clear all per-part animations and transforms
-    DROP_SEQUENCE.forEach(({sel})=>{
-      const el = $(sel);
-      if (!el) return;
-      el.classList.remove('drop-now');
-      el.style.transform = '';
-      el.style.animation = 'none';
-      void el.offsetWidth; // reflow
-    });
-    if (HAS_PUDDLE){
-      const puddle = $('.puddle');
-      if (puddle){
-        puddle.classList.remove('puddle-grow');
-        puddle.style.transform = 'scale(.2)';
-        void puddle.offsetWidth;
-      }
-    }
-  }
-
-  /* =================== HINT =================== */
+  /* ===== Hint ===== */
   function hint(){
     if (isFinished() || lives<=0) return;
     const set = new Set();
     answer.split('').forEach((ch,i)=>{ if (/[A-Z]/.test(ch) && revealed[i]==='_') set.add(ch); });
-    const options = [...set];
-    if (!options.length) return;
-    const letter = options[Math.floor(Math.random()*options.length)];
+    const opts = [...set]; if (!opts.length) return;
+    const letter = opts[Math.floor(Math.random()*opts.length)];
     answer.split('').forEach((ch,i)=>{ if (ch===letter) revealed[i]=letter; });
     if (!used.includes(letter)) updateUsed(letter);
     renderBlanks();
-    // Hint costs one life and triggers a drop
-    wrongStep();
+    wrongStep(); // costs a life
     if (!revealed.includes('_') && lives>=0){
       statusEl.innerHTML = `<span class="good">Solved with a hint!</span> The phrase was <strong>${answer}</strong>.`;
     }
     renderKeyboard();
   }
 
-  /* =================== CONTROLS =================== */
-  newBtn.addEventListener('click', ()=> reset());
-  revealBtn.addEventListener('click', ()=>{
-    statusEl.innerHTML = `<span class="bad">Revealed.</span> The phrase was <strong>${answer}</strong>.`;
-    revealAll(); renderKeyboard();
-  });
+  /* ===== Controls ===== */
+  newBtn.addEventListener('click', reset);
+  revealBtn.addEventListener('click', ()=>{ statusEl.innerHTML = `<span class="bad">Revealed.</span> The phrase was <strong>${answer}</strong>.`; revealAll(); renderKeyboard(); });
   hintBtn.addEventListener('click', hint);
+  testBtn.addEventListener('click', wrongStep); // quick animation test
+  window.addEventListener('keydown', (e)=>{ const k=e.key.toUpperCase(); if (/^[A-Z]$/.test(k)) guess(k); });
 
-  // Physical keyboard support
-  window.addEventListener('keydown', (e)=>{
-    const k = e.key.toUpperCase();
-    if (/^[A-Z]$/.test(k)) guess(k);
-  });
-
-  // Start
   reset();
 })();
 </script>
