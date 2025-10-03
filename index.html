@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Melting Snowman Hangman</title>
+<meta name="description" content="A festive Hangman game with a melting snowman animation.">
+<style>
+  :root { --bg:#0b1b2b; --card:#10304b; --ink:#eaf6ff; --accent:#8fd3ff; --good:#7ee081; --bad:#ff7d7d; }
+  *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Ubuntu,Arial,sans-serif;background:var(--bg);color:var(--ink);display:flex;min-height:100vh;align-items:center;justify-content:center}
+  .app{width:min(1000px,95vw);display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:center}
+  .card{background:var(--card);border-radius:16px;padding:18px 20px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+  h1{margin:0 0 8px;font-size:22px;color:var(--accent);letter-spacing:.5px}
+  .blanks{font-variant:tabular-nums;letter-spacing:.2rem;font-size:28px;display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
+  .blank{border-bottom:3px solid var(--ink);min-width:28px;text-align:center;padding:4px 2px}
+  .keyboard{display:grid;grid-template-columns:repeat(13,1fr);gap:8px}
+  button.key{padding:10px 0;border-radius:10px;border:0;background:#1b486d;color:var(--ink);cursor:pointer;font-weight:600}
+  button.key:disabled{opacity:.35;cursor:default}
+  .row{display:flex;gap:12px;flex-wrap:wrap}
+  .meta{display:flex;justify-content:space-between;align-items:center;margin:8px 0 16px}
+  .tag{background:#163b59;border-radius:999px;padding:6px 10px;font-size:12px;opacity:.85}
+  .good{color:var(--good)} .bad{color:var(--bad)}
+  .actions{display:flex;gap:10px;flex-wrap:wrap}
+  .actions button{background:#245d86;color:var(--ink);border:0;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer}
+  .used{font-size:13px;opacity:.8}
+  /* Snowman scene */
+  .scene{position:relative;aspect-ratio:1.1/1;background:linear-gradient(#0e2a44,#0b1b2b);border-radius:16px;overflow:hidden}
+  .snow{position:absolute;inset:auto 0 0 0;height:26%;background:linear-gradient(#eaf6ff,#cfeaff)}
+  .snowman{position:absolute;left:50%;bottom:22%;transform:translateX(-50%);width:48%}
+  svg{width:100%;height:auto}
+  /* melting animations */
+  .melt-hat{animation:slideoff .7s forwards ease-in}
+  .melt-head{animation:tilthead .7s forwards ease-in}
+  .melt-body{animation:sag .8s forwards ease}
+  .melt-arms{animation:droparms .6s forwards ease}
+  .melt-face{animation:drip .7s forwards ease}
+  .show-puddle{animation:puddlegrow .9s forwards ease}
+  @keyframes slideoff{to{transform:translateY(30px) rotate(-25deg);opacity:.0}}
+  @keyframes tilthead{to{transform:translateY(20px) rotate(10deg);opacity:.6}}
+  @keyframes sag{to{transform:translateY(18px) scaleX(1.02) scaleY(.9);opacity:.7}}
+  @keyframes droparms{to{transform:translateY(25px) rotate(20deg);opacity:.5}}
+  @keyframes drip{to{transform:translateY(12px);opacity:.3}}
+  @keyframes puddlegrow{from{transform:scale(.2);opacity:.0} to{transform:scale(1);opacity:1}}
+  .status{font-size:18px;margin-top:8px}
+</style>
+</head>
+<body>
+  <div class="app">
+    <div class="card">
+      <h1>Melting Snowman Hangman</h1>
+      <div class="meta">
+        <div class="tag">Lives: <span id="lives">6</span></div>
+        <div class="tag">Category: <span id="category">Holiday</span></div>
+      </div>
+      <div id="blanks" class="blanks" aria-live="polite"></div>
+      <p class="used">Used: <span id="used"></span></p>
+      <div id="keyboard" class="keyboard" aria-label="On-screen keyboard"></div>
+      <div class="actions">
+        <button id="new">New Word</button>
+        <button id="hint">Hint (-1 life)</button>
+        <button id="reveal">Reveal</button>
+      </div>
+      <div id="status" class="status" aria-live="polite"></div>
+    </div>
+
+    <div class="card scene">
+      <div class="snow"></div>
+      <div class="snowman">
+        <!-- Simple SVG snowman grouped by parts for animation -->
+        <svg viewBox="0 0 200 260" xmlns="http://www.w3.org/2000/svg" aria-label="Snowman">
+          <!-- puddle -->
+          <ellipse id="puddle" cx="100" cy="245" rx="60" ry="12" fill="#cfeaff" style="opacity:0;transform-origin:100px 245px;" />
+          <!-- body -->
+          <g id="body" style="transform-origin:100px 190px">
+            <ellipse cx="100" cy="180" rx="55" ry="50" fill="#eaf6ff" stroke="#cfeaff" stroke-width="3"/>
+            <circle cx="100" cy="95" r="38" fill="#eaf6ff" stroke="#cfeaff" stroke-width="3" id="head" style="transform-origin:100px 95px"/>
+          </g>
+          <!-- face -->
+          <g id="face" style="transform-origin:100px 95px">
+            <circle cx="90" cy="85" r="4" fill="#17364e"/>
+            <circle cx="110" cy="85" r="4" fill="#17364e"/>
+            <polygon points="100,95 100,105 130,100" fill="#ff9944"/>
+            <circle cx="100" cy="115" r="9" fill="none" stroke="#17364e" stroke-width="3"/>
+          </g>
+          <!-- hat -->
+          <g id="hat" style="transform-origin:100px 65px">
+            <rect x="78" y="45" width="44" height="22" fill="#17364e"/>
+            <rect x="68" y="65" width="64" height="8" fill="#17364e"/>
+            <rect x="78" y="45" width="44" height="6" fill="#8fd3ff"/>
+          </g>
+          <!-- arms -->
+          <g id="arms" stroke="#7a5228" stroke-width="5" stroke-linecap="round" style="transform-origin:100px 150px">
+            <path d="M55,150 Q70,140 85,145" fill="none"/>
+            <path d="M145,150 Q130,140 115,145" fill="none"/>
+          </g>
+          <!-- buttons -->
+          <g id="buttons">
+            <circle cx="100" cy="160" r="4" fill="#17364e"/>
+            <circle cx="100" cy="175" r="4" fill="#17364e"/>
+            <circle cx="100" cy="190" r="4" fill="#17364e"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const WORDS = [
+    "MISTLETOE","SLEIGH BELLS","WINTER WONDERLAND","GINGERBREAD","CANDY CANE",
+    "SNOWFLAKE","NORTH POLE","FRUITCAKE","ELF ON THE SHELF","SILENT NIGHT",
+    "HOT COCOA","UGLY SWEATER","JINGLE BELLS","REINDEER GAMES","HOLIDAY CHEER",
+    "CHRISTMAS CAROLS","STOCKING STUFFER","SUGAR PLUM FAIRY","TINSEL TOWN","NAUGHTY OR NICE",
+    "SECRET SANTA","WHITE ELEPHANT","YULE LOG","PEPPERMINT BARK","GIFT WRAP",
+    "SANTAS WORKSHOP","CHRISTMAS LIGHTS","WINTER SOLSTICE","HOLIDAY MOVIE MARATHON","NORTH STAR",
+    "FROSTY THE SNOWMAN","RUDOLPH THE RED NOSED REINDEER","SILVER BELLS","CAROLING DOOR TO DOOR","COOKIES AND MILK",
+    "CHESTNUTS ROASTING","HOLIDAY SPIRIT","DECK THE HALLS","THE NUTCRACKER","POLAR EXPRESS",
+    "SNOWBALL FIGHT","FAMILY DINNER","HOLIDAY BONUS","OFFICE PARTY","NEW YEARS EVE",
+    "ADVENT CALENDAR","CANDY CANE LANE","GINGERBREAD HOUSE","WINTER COAT","WASSAIL","SUGAR COOKIES"
+  ];
+  const MAX_LIVES = 6; // 6 wrong guesses → fully melted
+
+  // DOM
+  const blanksEl = document.getElementById('blanks');
+  const keyboardEl = document.getElementById('keyboard');
+  const usedEl = document.getElementById('used');
+  const livesEl = document.getElementById('lives');
+  const statusEl = document.getElementById('status');
+  const newBtn = document.getElementById('new');
+  const hintBtn = document.getElementById('hint');
+  const revealBtn = document.getElementById('reveal');
+
+  // Snowman parts
+  const hat = document.getElementById('hat');
+  const head = document.getElementById('head');
+  const face = document.getElementById('face');
+  const body = document.getElementById('body');
+  const arms = document.getElementById('arms');
+  const puddle = document.getElementById('puddle');
+
+  let answer, revealed, used, lives;
+
+  function pickWord(){
+    return WORDS[Math.floor(Math.random()*WORDS.length)];
+  }
+
+  function reset(word=null){
+    answer = (word || pickWord()).toUpperCase();
+    revealed = answer.split('').map(ch => ch === ' ' ? ' ' : (ch.match(/[A-Z]/) ? '_' : ch));
+    used = [];
+    lives = MAX_LIVES;
+    renderBlanks();
+    renderKeyboard();
+    usedEl.textContent = '';
+    livesEl.textContent = lives;
+    statusEl.textContent = '';
+    resetSnowman();
+  }
+
+  function resetSnowman(){
+    // Remove inline animations by resetting style attributes
+    [hat, face, body, arms, head, puddle].forEach(el => {
+      el.style.animation = 'none';
+      el.style.opacity = '';
+      el.style.transform = '';
+      void el.offsetWidth;
+    });
+    puddle.style.opacity = 0; puddle.style.transform = 'scale(.2)';
+  }
+
+  function renderBlanks(){
+    blanksEl.innerHTML = '';
+    revealed.forEach(ch => {
+      const span = document.createElement('span');
+      span.className = 'blank';
+      span.textContent = ch === ' ' ? ' ' : ch;
+      if (ch === ' ') span.style.borderBottom = '0';
+      blanksEl.appendChild(span);
+    });
+  }
+
+  function renderKeyboard(){
+    keyboardEl.innerHTML = '';
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+    letters.forEach(l=>{
+      const btn = document.createElement('button');
+      btn.className = 'key';
+      btn.textContent = l;
+      btn.disabled = used.includes(l) || isFinished();
+      btn.addEventListener('click', ()=> guess(l));
+      keyboardEl.appendChild(btn);
+    });
+  }
+
+  function updateUsed(letter){
+    used.push(letter);
+    usedEl.textContent = used.join(' ');
+  }
+
+  function guess(letter){
+    if (used.includes(letter) || isFinished()) return;
+    updateUsed(letter);
+
+    if (answer.includes(letter)){
+      // fill in
+      answer.split('').forEach((ch, i) => {
+        if (ch === letter) revealed[i] = letter;
+      });
+      renderBlanks();
+      if (!revealed.includes('_')) {
+        statusEl.innerHTML = `<span class="good">You win!</span> The phrase was <strong>${answer}</strong>.`;
+        renderKeyboard();
+      }
+    } else {
+      wrongStep();
+    }
+    renderKeyboard();
+  }
+
+  function wrongStep(){
+    lives--;
+    livesEl.textContent = lives;
+    meltStep();
+    if (lives <= 0){
+      statusEl.innerHTML = `<span class="bad">You lose!</span> The phrase was <strong>${answer}</strong>.`;
+      revealRemaining();
+      renderKeyboard();
+    }
+  }
+
+  function revealRemaining(){
+    revealed = answer.split('').map(ch => ch === ' ' ? ' ' : ch);
+    renderBlanks();
+  }
+
+  function isFinished(){
+    return lives<=0 || !revealed.includes('_');
+  }
+
+  // Animate one melt step per wrong guess
+  function meltStep(){
+    const step = MAX_LIVES - lives; // 1..6
+    // reset animations so they can replay
+    [hat, head, body, arms, face, puddle].forEach(el => { el.style.animation = 'none'; void el.offsetWidth; });
+
+    switch(step){
+      case 1: hat.style.animation = 'slideoff .7s forwards ease-in'; break;
+      case 2: arms.style.animation = 'droparms .6s forwards ease'; break;
+      case 3: face.style.animation = 'drip .7s forwards ease'; break;
+      case 4: head.style.animation = 'tilthead .7s forwards ease-in'; break;
+      case 5: body.style.animation = 'sag .8s forwards ease'; break;
+      case 6: puddle.style.animation = 'puddlegrow .9s forwards ease'; break;
+    }
+  }
+
+  // Hint: reveal one random hidden letter, costs 1 life
+  function hint(){
+    if (isFinished() || lives <= 0) return;
+    // Find unrevealed letters (A-Z) still hidden
+    const unrevealedSet = new Set();
+    answer.split('').forEach((ch, i) => {
+      if (/[A-Z]/.test(ch) && revealed[i] === '_') unrevealedSet.add(ch);
+    });
+    const options = Array.from(unrevealedSet);
+    if (options.length === 0) return;
+    const letter = options[Math.floor(Math.random()*options.length)];
+    // Reveal all instances
+    answer.split('').forEach((ch, i) => {
+      if (ch === letter) revealed[i] = letter;
+    });
+    // Mark as used so it disables on keyboard
+    if (!used.includes(letter)) updateUsed(letter);
+    renderBlanks();
+    // Cost: 1 life + melt step
+    wrongStep();
+    // If that took you to 0 lives but you revealed the last letter, count as win
+    if (!revealed.includes('_') && lives >= 0){
+      statusEl.innerHTML = `<span class="good">Solved with a hint!</span> The phrase was <strong>${answer}</strong>.`;
+    }
+    renderKeyboard();
+  }
+
+  // Controls
+  newBtn.addEventListener('click', ()=> reset());
+  revealBtn.addEventListener('click', ()=>{
+    statusEl.innerHTML = `<span class="bad">Revealed.</span> The phrase was <strong>${answer}</strong>.`;
+    revealRemaining();
+    renderKeyboard();
+  });
+  hintBtn.addEventListener('click', hint);
+
+  // Start
+  reset();
+})();
+</script>
+</body>
+</html>
