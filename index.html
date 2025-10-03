@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Melting Snowman Hangman</title>
-<meta name="description" content="Hangman with a custom melting snowman using layered PNGs.">
+<title>Melting Snowman Hangman — Per-Part Drops</title>
+<meta name="description" content="Hangman with a custom snowman where each part drops on a wrong guess.">
 <style>
   /* ====== Theme ====== */
   :root{
@@ -43,15 +43,24 @@
   }
   .ground{position:absolute;inset:auto 0 0 0;height:26%;background:linear-gradient(#eaf6ff,#cfeaff)}
   .snowman-wrap{position:relative;width:min(480px,86%);aspect-ratio:3/4}
-  .part{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:contain;pointer-events:none}
+  .part{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:contain;pointer-events:none;will-change:transform}
 
-  /* ====== Melt keyframes ====== */
-  @keyframes slideoff { to { transform: translateY(-24px) rotate(-18deg); opacity:.0 } }
-  @keyframes droparms { to { transform: translateY(35px) rotate(18deg); opacity:.55 } }
-  @keyframes drip     { to { transform: translateY(14px); opacity:.25 } }
-  @keyframes tilthead { to { transform: translateY(18px) rotate(10deg); opacity:.7 } }
-  @keyframes sag      { to { transform: translateY(20px) scaleX(1.02) scaleY(.92); opacity:.8 } }
-  @keyframes puddle   { from { transform: scale(.2); opacity:0 } to { transform: scale(1); opacity:1 } }
+  /* ====== New: per-part drop animation (no fading) ====== */
+  /* We drop to ~115% of the snowman box height so it lands on the ground band */
+  @keyframes drop {
+    0%   { transform: translateY(0) rotate(var(--rot,0deg)); }
+    88%  { transform: translateY(115%) rotate(var(--rot,0deg)); }
+    100% { transform: translateY(115%) rotate(var(--rot,0deg)); }
+  }
+  .drop-now { animation: drop .7s ease-in forwards; }
+
+  /* Optional puddle grow (kept, but no opacity fade) */
+  @keyframes puddle {
+    0%   { transform: scale(.2); }
+    100% { transform: scale(1);  }
+  }
+  .puddle { opacity:1; transform:scale(.2); } /* visible by default but tiny */
+  .puddle-grow { animation: puddle .9s ease-out forwards; }
 
   /* Mobile layout */
   @media (max-width: 860px){ .app{grid-template-columns:1fr} }
@@ -63,7 +72,7 @@
     <div class="card" role="region" aria-label="Game controls">
       <h1>Melting Snowman Hangman</h1>
       <div class="meta">
-        <div class="tag">Lives: <span id="lives">6</span></div>
+        <div class="tag">Lives: <span id="lives">–</span></div>
         <div class="tag">Category: <span id="category">Holiday</span></div>
       </div>
 
@@ -98,8 +107,8 @@
         <img src="images/arm-left.png"   class="part arm-left"   alt="">
         <img src="images/arm-right.png"  class="part arm-right"  alt="">
         <img src="images/hat.png"        class="part hat"        alt="">
-        <!-- optional puddle image -->
-        <img src="images/puddle.png"     class="part puddle"     alt="" style="opacity:0; transform:scale(.2)">
+        <!-- optional puddle image (starts small; grows on the final step) -->
+        <img src="images/puddle.png"     class="part puddle"     alt="">
       </div>
     </div>
   </div>
@@ -119,7 +128,30 @@
     "SNOWBALL FIGHT","FAMILY DINNER","HOLIDAY BONUS","OFFICE PARTY","NEW YEARS EVE",
     "ADVENT CALENDAR","CANDY CANE LANE","GINGERBREAD HOUSE","WINTER COAT","WASSAIL","SUGAR COOKIES"
   ];
-  const MAX_LIVES = 6; // number of wrong steps → full melt
+
+  /* PARTS: order of drops (one per wrong guess).
+     You can reorder this array to change the sequence.
+     Each item: { sel: '.css-class', rot: degrees }  (rot optional)
+  */
+  const DROP_SEQUENCE = [
+    { sel: '.hat',        rot: -12 },
+    { sel: '.brow-left',  rot: -6  },
+    { sel: '.brow-right', rot:  6  },
+    { sel: '.eye-left',   rot: -3  },
+    { sel: '.eye-right',  rot:  3  },
+    { sel: '.nose',       rot:  8  },
+    { sel: '.scarf',      rot: -10 },
+    { sel: '.arm-left',   rot: -14 },
+    { sel: '.arm-right',  rot:  14 },
+    { sel: '.head',       rot:  10 },
+    { sel: '.torso',      rot:  6  },
+    { sel: '.bottom',     rot:  4  },
+    // Final step (if present) will grow the puddle instead of dropping it
+    // Puddle is handled separately so it doesn't disappear below the ground.
+  ];
+
+  const HAS_PUDDLE = !!document.querySelector('.puddle');
+  const MAX_LIVES = DROP_SEQUENCE.length + (HAS_PUDDLE ? 1 : 0);
 
   /* =================== DOM =================== */
   const blanksEl = document.getElementById('blanks');
@@ -131,28 +163,10 @@
   const hintBtn = document.getElementById('hint');
   const revealBtn = document.getElementById('reveal');
 
-  // Helper to select (returns null if missing)
-  const $ = (sel) => document.querySelector(sel);
-
-  // Parts (images) — includes eyebrows
-  const parts = {
-    hat:      $('.hat'),
-    armL:     $('.arm-left'),
-    armR:     $('.arm-right'),
-    eyeL:     $('.eye-left'),
-    eyeR:     $('.eye-right'),
-    browL:    $('.brow-left'),
-    browR:    $('.brow-right'),
-    nose:     $('.nose'),
-    head:     $('.head'),
-    torso:    $('.torso'),
-    bottom:   $('.bottom'),
-    puddle:   $('.puddle')
-  };
-
   /* =================== STATE =================== */
-  let answer, revealed, used, lives;
+  let answer, revealed, used, lives, wrongs;
 
+  function $(sel){ return document.querySelector(sel); }
   function pickWord(){ return WORDS[Math.floor(Math.random()*WORDS.length)]; }
 
   function reset(word=null){
@@ -160,13 +174,14 @@
     revealed = answer.split('').map(ch => ch===' '? ' ' : (/[A-Z]/.test(ch)? '_' : ch));
     used = [];
     lives = MAX_LIVES;
+    wrongs = 0;
     blanksEl.innerHTML = '';
     usedEl.textContent = '';
     livesEl.textContent = lives;
     statusEl.textContent = '';
     renderBlanks();
     renderKeyboard();
-    resetMelt();
+    resetParts();
   }
 
   /* =================== RENDER =================== */
@@ -218,9 +233,24 @@
   }
 
   function wrongStep(){
+    if (wrongs < DROP_SEQUENCE.length){
+      const step = DROP_SEQUENCE[wrongs];
+      const part = $(step.sel);
+      if (part){
+        part.style.setProperty('--rot', (step.rot||0) + 'deg');
+        // replay animation
+        part.classList.remove('drop-now'); void part.offsetWidth; part.classList.add('drop-now');
+      }
+    } else if (HAS_PUDDLE){
+      const puddle = $('.puddle');
+      if (puddle){
+        puddle.classList.remove('puddle-grow'); void puddle.offsetWidth; puddle.classList.add('puddle-grow');
+      }
+    }
+    wrongs++;
     lives--;
     livesEl.textContent = lives;
-    meltStep();
+
     if (lives<=0){
       statusEl.innerHTML = `<span class="bad">You lose!</span> The phrase was <strong>${answer}</strong>.`;
       revealAll();
@@ -233,55 +263,23 @@
     renderBlanks();
   }
 
-  /* =================== MELT ANIMATIONS =================== */
-  // Inline animation helper so it always replays
-  function play(el, css){ if (!el) return; el.style.animation='none'; void el.offsetWidth; el.style.animation = css; }
-  function clear(el){ if (!el) return; el.style.animation='none'; el.style.opacity=''; el.style.transform=''; void el.offsetWidth; }
-
-  function resetMelt(){
-    Object.values(parts).forEach(clear);
-    if (parts.puddle){ parts.puddle.style.opacity=0; parts.puddle.style.transform='scale(.2)'; }
-  }
-
-  /* Order:
-      1) Hat slides off
-      2) Arms drop
-      3) Face drips (eyes + eyebrows + nose)
-      4) Head tilts
-      5) Torso + bottom sag
-      6) Puddle grows
-  */
-  function meltStep(){
-    const step = MAX_LIVES - lives + 1; // 1..6
-
-    switch(step){
-      case 1:
-        play(parts.hat, 'slideoff .7s forwards ease-in');
-        break;
-      case 2:
-        play(parts.armL, 'droparms .6s forwards ease');
-        play(parts.armR, 'droparms .6s forwards ease');
-        break;
-      case 3:
-        play(parts.eyeL, 'drip .7s forwards ease');
-        play(parts.eyeR, 'drip .7s forwards ease');
-        play(parts.browL, 'drip .7s forwards ease');
-        play(parts.browR, 'drip .7s forwards ease');
-        play(parts.nose, 'drip .7s forwards ease');
-        break;
-      case 4:
-        play(parts.head, 'tilthead .7s forwards ease-in');
-        break;
-      case 5:
-        play(parts.torso, 'sag .8s forwards ease');
-        play(parts.bottom,'sag .8s forwards ease');
-        break;
-      case 6:
-        if (parts.puddle){
-          parts.puddle.style.opacity=0; parts.puddle.style.transform='scale(.2)';
-          play(parts.puddle,'puddle .9s forwards ease');
-        }
-        break;
+  function resetParts(){
+    // Clear all per-part animations and transforms
+    DROP_SEQUENCE.forEach(({sel})=>{
+      const el = $(sel);
+      if (!el) return;
+      el.classList.remove('drop-now');
+      el.style.transform = '';
+      el.style.animation = 'none';
+      void el.offsetWidth; // reflow
+    });
+    if (HAS_PUDDLE){
+      const puddle = $('.puddle');
+      if (puddle){
+        puddle.classList.remove('puddle-grow');
+        puddle.style.transform = 'scale(.2)';
+        void puddle.offsetWidth;
+      }
     }
   }
 
@@ -296,7 +294,7 @@
     answer.split('').forEach((ch,i)=>{ if (ch===letter) revealed[i]=letter; });
     if (!used.includes(letter)) updateUsed(letter);
     renderBlanks();
-    // cost a life
+    // Hint costs one life and triggers a drop
     wrongStep();
     if (!revealed.includes('_') && lives>=0){
       statusEl.innerHTML = `<span class="good">Solved with a hint!</span> The phrase was <strong>${answer}</strong>.`;
@@ -318,14 +316,7 @@
     if (/^[A-Z]$/.test(k)) guess(k);
   });
 
-  // (Optional) log missing parts once on load
-  window.addEventListener('load', ()=>{
-    Object.entries(parts).forEach(([name, el])=>{
-      if (!el) console.warn('Missing image layer:', name);
-    });
-  });
-
-  // Go!
+  // Start
   reset();
 })();
 </script>
